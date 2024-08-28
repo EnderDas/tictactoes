@@ -12,11 +12,10 @@ color_pallet = { #generated using coolors.co
     "pink": "#E0479E", #Hollywood Cerise
 }
 
-from re import S
-import colorful as colors
 from msvcrt import kbhit, getch
 from errors import *
 from option import *
+import time
 
 #colors.replace_pallet(color_pallet)
 #this throws an error, figure it out bubba
@@ -81,7 +80,7 @@ class Screen:
         if isinstance(options, OptionGroup):
             itemized = []
             for i in options.keys:
-                item = f"[{i}] {options.get_option(key=i).name}"
+                item = f"[{i.upper()}] {options.get_option(key=i).name}"
                 itemized.append(item)
             text = '\n'.join(itemized)
             self.printAtCenter(text)
@@ -117,6 +116,7 @@ class Handler:
     def __init__(self, input):
         self.input = input
         self.binds = {}
+        self.bind_keys = []
         
     def is_binded(self, func, key=None) -> tuple:
         for i in self.binds.keys():
@@ -140,8 +140,10 @@ class Handler:
             else:
                 raise Exception("Cannot bind function twice to same key")
             self.binds[key] = new_binds
+            self.bind_keys.append(key)
         else:
             self.binds[key] = func
+            self.bind_keys.append(key)
 
     def bind_option(self, option: Option):
         self.bind(option.action, option.key)
@@ -152,20 +154,27 @@ class Handler:
         for i in options.group:
             self.bind_option(i)
 
+    def clear_bindings(self):
+        self.binds = {}
+        self.bind_keys = []
+
     def listen(self, key):
         """
         call this function in your main loop to call and check for
         key presses and call the subsequent binded func/functions to the given
         key.
         """
-        if self.input.awaiting:
+        if self.input.awaiting():
             k = self.input.getKey()
             if k == key:
                 self.call_binding(key)
 
-    def listener(self):
-        for i in self.binds.keys():
-            self.listen(i)
+    def listener(self): #probably not a good idea to iterate through each key
+        if self.input.awaiting(): #AND then start handling the keys lol
+            keypress = self.input.getKey() 
+            if keypress in self.bind_keys:
+                self.call_binding(keypress)
+
 
 class Inputs:
 
@@ -222,9 +231,8 @@ class Inputs:
         self.bindings = []
         self.handler = Handler(self)
     
-    @property
     def awaiting(self) -> bool:
-        return kbhit()
+        return False if kbhit() == 0 else True
     
     def getKey(self) -> str:
         return self.keys[str(ord(getch()))]

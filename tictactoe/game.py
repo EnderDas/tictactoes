@@ -123,29 +123,52 @@
 
 from screen import *
 from option import *
-from tictactoe import *
+from tictactoe import TicTacToe, ChaosTtt, PandemoniumTtt
 import os, time
 
 class Game:
 
     def __init__(self):
         #game constants here
-        self.baseTicTacToe = TicTacToe(self)
         self.screen = Screen()
         self.input = Inputs()
         self.inp_handle = self.input.handle
+        self.baseTtt = TicTacToe(self)
+        self.chaosTtt = ChaosTtt(self)
+        self.pandeTtt = PandemoniumTtt(self)
 
     def GameLoop(self):
-        #main game loop here
-        #open :Main: the main menu screen for basic tictactoe
-        #self.Menu()
-        #throw :Exit: from here after :Menu: quits
-        #if they leave the menu screen let the main loop handle it
-        #self.Exit()
-        pass
+        self.inp_handle.clear_bindings()
+        options = OptionGroup([{
+                "key": 't',
+                "name": "TicTacToe",
+                "action": self.baseTtt.GameLoop
+            },
+            {
+                "key": 'c',
+                "name": "Chaos TicTacToe",
+                "action": self.chaosTtt.GameLoop
+            },
+            {
+                "key": 'p',
+                "name": "Pandemonium TicTacToe",
+                "action": self.pandeTtt.GameLoop
+            },
+            {
+                "key": 'q',
+                "name": "Quit",
+                "action": self.Quit
+            }
+        ])
+        self.screen.clear()
+        self.screen.menu(options)
+        self.inp_handle.bind_options(options)
+        while True:
+            self.inp_handle.listener()
 
     def MainMenu(self):
         #static variables and definitions go here
+        self.inp_handle.clear_bindings()
         options = OptionGroup([{
                 "key": 'p',
                 "name": "Play",
@@ -160,23 +183,17 @@ class Game:
         self.screen.clear()
         self.screen.menu(options)
         self.inp_handle.bind_options(options)
+        print(self.input.awaiting())
         while True:
             self.inp_handle.listener()
             
     def Play(self):
-        options = {
-        }
         self.screen.clear()
-        self.screen.printAtCenter(
-            "nothing here yet sorry!"
-        )
+        self.screen.printAtCenter("Ready for some Tic Tac Toe?")
         time.sleep(5)
-        self.Quit()
+        self.GameLoop()
 
     def Quit(self):
-        options = {
-
-        }
         self.screen.clear()
         self.screen.printAtCenter(
             "thank you for using my software!"
