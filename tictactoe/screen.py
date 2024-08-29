@@ -1,29 +1,13 @@
-#errors
-
-#color pallet for colorful to use
-color_pallet = { #generated using coolors.co
-    "dark": "#3F3F37", #Black Olive
-    "light": "#D3BDB0", #Pale Dogwood
-    "blue": "#3F88C5", #Steel Blue
-    "green": "#49BEAA", #Keppel
-    "red": "#FF495C", #Folly
-    "yellow": "#EEB868", #Earth Yellow
-    "purple": "#593C8F", #Rebecca Purple
-    "pink": "#E0479E", #Hollywood Cerise
-}
 
 from msvcrt import kbhit, getch
 from errors import *
 from option import *
 import time
 
-#colors.replace_pallet(color_pallet)
-#this throws an error, figure it out bubba
-
 #basic screen class
 class Screen:
 
-    class WinScreen:
+    class WinScreen: #move to separate file and make a proper wrapper
 
         import ctypes
         STD_OUTPUT_HANDLE = -11
