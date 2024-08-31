@@ -1,6 +1,6 @@
 import ctypes
-from ctypes import Structure, byref, wintypes
-
+from ctypes import Structure, byref, wintypes ,sizeof
+from winfunc import WindowsCtypesHandler as WinTools
 """
 8/29/24
 reading refs & writing this has given me a splitting headache
@@ -16,96 +16,102 @@ this function was really the only thing i absolutely needed working and it does
 so for now, thank you and goodnight :)
 """
 
-STDOUT = -11 #Standard output handle
+STDOUT = -11
+FILE_SHARE_READ = 0x00000001
+FILE_SHARE_WRITE = 0x00000002
+GENERIC_READ = 0x80000000
+GENERIC_WRITE = 0x40000000
 
-COORD = wintypes._COORD
+kernel32 = ctypes.windll.kernel32 #simplifying kernel32
 
-class WindowCOORD:
+WinTool = WinTools(kernel32, wintypes)
 
-    row: int
-    col: int
+@WinTool.struct
+class COORD(Structure):
+    _fields_ = [('X', wintypes.SHORT),
+                ('Y', wintypes.SHORT)]
 
-    @classmethod
-    def from_param(cls, value: "WindowCOORD"):
-        return COORD(value.col, value.row)
-    
-class CONSOLE_SCREEN_BUFFER_INFO(Structure):
-    _fields_ = [
-        ("dwSize", COORD),
-        ("dwCursorPosition", COORD),
-        ("wAttributes", wintypes.WORD),
-        ("srWindow", wintypes.SMALL_RECT),
-        ("dwMaximumWindowSize", COORD),
-    ]
+LPCSTR = wintypes.LPVOID
 
-kernel32 = ctypes.windll.kernel32
+@WinTool.struct
+class SECURITY_ATTRIBUTES(Structure):
+    _fields_ = [('nLength', wintypes.DWORD),
+                ('lpSecurityDescriptor', LPCSTR),
+                ('bInheritHandle', wintypes.DWORD)]
 
-_GetStdHandle = kernel32.GetStdHandle
-_GetStdHandle.argtypes = [
-    wintypes.DWORD,
-]
-_GetStdHandle.restype = wintypes.HANDLE
+LPSCAT = ctypes.POINTER(SECURITY_ATTRIBUTES) #haha lp-scat lol
+WinTool.struct(LPSCAT)
 
-def GetStdHandle(handle: int):
-    return _GetStdHandle(handle)
+#Windows Wrapped Functions using WinTool (WindowsCtypesHandler)
 
-_GetConsoleMode = kernel32.GetConsoleMode
-_GetConsoleMode.argtypes = [wintypes.HANDLE, wintypes.LPDWORD]
-_GetConsoleMode.restype = wintypes.BOOL
+kernel32 = ctypes.windll.kernel32 #simplifying kernel32
 
-def GetConsoleMode(std_handle):
+@WinTool.func_attr(kernel32.GetStdHandle,
+                   [wintypes.DWORD],
+                   wintypes.HANDLE)
+def GetStdHandle(self, handle: int):
+    """
+    returns handle using given handle ID
+    """
+    return self(handle)
+
+@WinTool.func_attr(kernel32.GetConsoleMode,
+                   [wintypes.HANDLE, wintypes.LPDWORD],
+                   wintypes.BOOL)
+def GetConsoleMode(self, std_handle):
+    """
+    returns handle mode with given handle ID
+    """
     con_mode = wintypes.DWORD()
-    result = bool(_GetConsoleMode(std_handle, con_mode))
+    result = bool(self(std_handle, con_mode))
     if result:
         return con_mode.value
     
-_FillConsoleOutputAttribute = kernel32.FillConsoleOutputAttribute
-_FillConsoleOutputAttribute.argtypes = [
-    wintypes.HANDLE,
-    wintypes.WORD,
-    wintypes.DWORD,
-    WindowCOORD,
-    ctypes.POINTER(wintypes.DWORD),
-]
-_FillConsoleOutputAttribute.restype = wintypes.BOOL
-
+@WinTool.func_attr(kernel32.FillConsoleOutputAttribute,
+                   [
+                       wintypes.HANDLE, wintypes.WORD, wintypes.DWORD,
+                       COORD, wintypes.LPDWORD],
+                       wintypes.BOOL)
 def FillConsoleOutputAttribute(
+        self,
         std_handle,
         attributes,
         length,
         start
     ):
+
+    """
+    Fills given attributes for a given length of characters 
+    from the given starting point
+    """
+
     cells = wintypes.DWORD(length)
     style = wintypes.WORD(attributes)
     num_written = wintypes.DWORD(0)
-    _FillConsoleOutputAttribute(
+    self(
         std_handle, style, cells, start, byref(num_written)
     )
     return num_written.value
 
-_CreateConsoleScreenBuffer = kernel32.CreateConsoleScreenBuffer
-"""
-_CreateConsoleScreenBuffer.argtypes = [
-    wintypes.DWORD,
-    wintypes.DWORD,
-    None,
-    wintypes.DWORD,
-    None
-]
-no from_param for CreateConsoleScreenBuffer, but it still works? idk
-"""
-_CreateConsoleScreenBuffer.restype = wintypes.HANDLE
-
-def CreateConsoleScreenBuffer(access = None, shared = None, flags = None):
-    access = access if access else wintypes.DWORD(0x80000000 | 0x40000000)
-    shared = shared if shared else wintypes.DWORD(0x00000001 | 0x00000002)
-    flags = flags if flags else wintypes.DWORD(1)
-    buffer = _CreateConsoleScreenBuffer(access, shared, None, flags, None)
+WinTool.func_attr(kernel32.CreateConsoleScreenBuffer,
+                  [
+                    wintypes.DWORD, wintypes.DWORD, LPSCAT, 
+                    wintypes.DWORD, wintypes.LPVOID],
+                 wintypes.HANDLE)
+def CreateConsoleScreenBuffer(self, access = GENERIC_READ | GENERIC_WRITE,
+                                    shared = FILE_SHARE_READ | FILE_SHARE_WRITE):
+    """
+    Creates and returns a windows console screen buffer handle
+    """ #defaults
+    flags = wintypes.DWORD(1) #defaults
+    security = SECURITY_ATTRIBUTES(sizeof(SECURITY_ATTRIBUTES), None, True)
+    buffer = self(access, shared, None, flags, None)
     if buffer == wintypes.HANDLE(-1):
-        raise Exception("could not create buffer")
+        raise Exception("could not create buffer") #this should never be the case
     else:
-        return buffer
+        return buffer 
 
+@WinTool.struct
 class CONSOLE_SCREEN_BUFFER_INFOEX(Structure):
     _fields_ = (('cbSize',               wintypes.ULONG),
                 ('dwSize',               COORD),
@@ -117,6 +123,10 @@ class CONSOLE_SCREEN_BUFFER_INFOEX(Structure):
                 ('bFullscreenSupported', wintypes.BOOL),
                 ('ColorTable',           wintypes.DWORD * 16))
 
+LPBUEX = ctypes.POINTER(CONSOLE_SCREEN_BUFFER_INFOEX)
+WinTool.struct(LPBUEX)
+
+@WinTool.struct
 class CONSOLE_SCREEN_BUFFER_INFO(Structure):
     _fields_ = [
         ("dwSize", COORD),
@@ -126,119 +136,54 @@ class CONSOLE_SCREEN_BUFFER_INFO(Structure):
         ("dwMaximumWindowSize", COORD),
     ]
 
-_GetConsoleScreenBufferInfo = kernel32.GetConsoleScreenBufferInfo
-_GetConsoleScreenBufferInfo.argtypes = [
-    wintypes.HANDLE,
-    ctypes.POINTER(CONSOLE_SCREEN_BUFFER_INFO),
-]
-_GetConsoleScreenBufferInfo.restype = wintypes.BOOL
+LPBUFF = ctypes.POINTER(CONSOLE_SCREEN_BUFFER_INFO)
+WinTool.struct(LPBUFF)
 
-def GetConsoleScreenBufferInfo(std_handle):
+@WinTool.func_attr(kernel32.GetConsoleScreenBufferInfo,
+                   [wintypes.HANDLE, LPBUFF],
+                   wintypes.BOOL)
+def GetConsoleScreenBufferInfo(self, std_handle):
+    """
+    Returns ConsoleScreenBuffer info using given handle
+    """
     buffer_info = CONSOLE_SCREEN_BUFFER_INFO()
-    _GetConsoleScreenBufferInfo(std_handle, byref(buffer_info))
+    self(std_handle, byref(buffer_info))
     return buffer_info
 
-_GetConsoleScreenBufferInfoEx = kernel32.GetConsoleScreenBufferInfoEx
-_GetConsoleScreenBufferInfoEx.argtypes = [
-    wintypes.HANDLE,
-    ctypes.POINTER(CONSOLE_SCREEN_BUFFER_INFOEX)
-]
-_GetConsoleScreenBufferInfoEx.restype = wintypes.BOOL
-
-def GetConsoleScreenBufferInfoEx(std_handle):
+@WinTool.func_attr(kernel32.GetConsoleScreenBufferInfoEx,
+                   [wintypes.HANDLE, LPBUEX],
+                   wintypes.BOOL)
+def GetConsoleScreenBufferInfoEx(self, std_handle):
+    """
+    Returns ConsoleScreenBuffer extended info using given handle
+    """
     extended_buffer_info = CONSOLE_SCREEN_BUFFER_INFOEX()
-    _GetConsoleScreenBufferInfoEx(int(std_handle), byref(extended_buffer_info))
+    self(int(std_handle), byref(extended_buffer_info))
     return extended_buffer_info
 
-_SetConsoleCursorPosition = kernel32.SetConsoleCursorPosition
-_SetConsoleCursorPosition.argtypes = [
-    wintypes.HANDLE,
-    WindowCOORD,
-]
-_SetConsoleCursorPosition.restype = wintypes.BOOL
+@WinTool.func_attr(kernel32.SetConsoleCursorPosition,
+                   [wintypes.HANDLE, COORD],
+                   wintypes.BOOL)
+def SetConsoleCursorPosition(self, std_handle, coords):
+    """
+    Sets console cursor position using given HANDLE and COORD
+    """
+    return bool(self(std_handle, coords))
 
-def SetConsoleCursorPosition(std_handle, coords):
-    return bool(_SetConsoleCursorPosition(std_handle, coords))
-
-_SetConsoleTextAttribute = kernel32.SetConsoleTextAttribute
-_SetConsoleTextAttribute.argtypes = [
-    wintypes.HANDLE,
-    wintypes.WORD,
-]
-_SetConsoleTextAttribute.restype = wintypes.BOOL
-
-def SetConsoleTextAttribute(handle, attributes):
-    return bool(_SetConsoleTextAttribute(handle, attributes))
-
-handle = GetStdHandle(STDOUT)
-buffer_info = GetConsoleScreenBufferInfo(handle)
-print(buffer_info)
-extended_info = GetConsoleScreenBufferInfoEx(handle)
-print(extended_info)
-
-def _decode_RGB(color_hex):
-    red = color_hex & 255
-    green = (color_hex >> 8) & 255
-    blue = (color_hex >> 16) & 255
-    return (red, green, blue)
-
-color_pallet = { #generated using coolors.co
-    "black": 0x00000000,
-    "white": 0x00FFFFFF,
-    #"grey": 0x003F3F37, #Black Olive
-    #"light": 0x00D3BDB0, #Pale Dogwood
-    "blue": 0x003F88C5, #Steel Blue
-    "green": 0x0049BEAA, #Keppel
-    "red": 0x00FF495C, #Folly
-    "yellow": 0x00EEB868, #Earth Yellow
-    "purple": 0x00593C8F, #Rebecca Purple
-    "pink": 0x00E0479E, #Hollywood Cerise
-}
-
-class Colors:
-    BLACK = 0
-    WHITE = 1
-    BLUE = 2
-    GREEN = 3
-    RED = 4
-    YELLOW = 5
-    PURPLE = 6
-    PINK = 7
+@WinTool.func_attr(kernel32.SetConsoleTextAttribute,
+                   [wintypes.HANDLE, wintypes.WORD],
+                   wintypes.BOOL)
+def SetConsoleTextAttribute(self, handle, attributes):
+    """
+    Sets text attribute for text rendered to console, clips
+    """
+    return bool(self(handle, attributes))
 
 
-class Styles(object):
-    NORMAL              = 0x00 # dim text, dim background
-    BRIGHT              = 0x08 # bright text, dim background
-    BRIGHT_BACKGROUND   = 0x80 # dim text, bright background
-
-class WindowColor:
-
-    def __init__(self):
-        self._default = GetConsoleScreenBufferInfo(STDOUT).wAttributes
-        self.set_attrs(self._default)
-        self._light = 0
-
-    def set_attrs(self, value):
-        self._fore = value & 7
-        self._back = (value >> 4) & 7
-        self._style = value & (Styles.BRIGHT | Styles.BRIGHT_BACKGROUND)
-
-    def get_attrs(self):
-        return self._fore + self._back * 16 + (self._style)
-    
-    def fore(self, color):
-        self._fore = color
-
-    def back(self, color):
-        self._back = color
-
-    def style(self, style):
-        self._style = style
-
+#testing ScreenBuffer functions
 if __name__ == "__main__":
-    color = WindowColor()
-    color.fore(Colors.WHITE)
-    color.back(Colors.PURPLE)
-    color.style(Styles.BRIGHT_BACKGROUND)
     handle = GetStdHandle(STDOUT)
-    SetConsoleTextAttribute(handle, color.get_attrs())
+    buffer_info = GetConsoleScreenBufferInfo(handle)
+    print(buffer_info)
+    extended_info = GetConsoleScreenBufferInfoEx(handle)
+    print(extended_info)
