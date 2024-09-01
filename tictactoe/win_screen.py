@@ -3,17 +3,26 @@ from ctypes import Structure, byref, wintypes ,sizeof
 from winfunc import WindowsCtypesHandler as WinTools
 """
 8/29/24
-reading refs & writing this has given me a splitting headache
-i want to claw my eyes out...
+    reading refs & writing this has given me a splitting headache
+    i want to claw my eyes out...
 
-i dont have it in me to comment or doc any of this code right now
-i will do so on a later date (im still missing a lot of things LMAO)
+    i dont have it in me to comment or doc any of this code right now
+    i will do so on a later date (im still missing a lot of things LMAO)
 
-i couldn't find a single fucking thing of anyone using ctypes.windll.kernel32
-GetConsoleScreenBufferInfoEx ANYWHERE but alas it works
-this function was really the only thing i absolutely needed working and it does
+    i couldn't find a single fucking thing of anyone using ctypes.windll.kernel32
+    GetConsoleScreenBufferInfoEx ANYWHERE but alas it works
+    this function was really the only thing i absolutely needed working and it does
 
-so for now, thank you and goodnight :)
+    so for now, thank you and goodnight :)
+
+8/31/24
+    boy the difference that decorator class makes is immeasurable, quite
+    happy with how well that turned out, i added a bunch more stuff and it looks
+    way cleaner than it did before, found some stuff on the cbsiEx so it doesn't
+    look so sketchy now, thank god i put in a little time to clean this up.
+
+    I dont think im gonna touch this for awhile or at least until i need to add 
+    more stuff to it, until them. c'est la vie to this shit
 """
 
 STDOUT = -11
@@ -39,12 +48,41 @@ class SECURITY_ATTRIBUTES(Structure):
                 ('lpSecurityDescriptor', LPCSTR),
                 ('bInheritHandle', wintypes.DWORD)]
 
+@WinTool.struct
+class CONSOLE_SCREEN_BUFFER_INFO(Structure):
+    _fields_ = [
+        ("dwSize", COORD),
+        ("dwCursorPosition", COORD),
+        ("wAttributes", wintypes.WORD),
+        ("srWindow", wintypes.SMALL_RECT),
+        ("dwMaximumWindowSize", COORD),
+    ]
+
+@WinTool.struct
+class CONSOLE_SCREEN_BUFFER_INFOEX(Structure):
+    _fields_ = (('cbSize',               wintypes.ULONG),
+                ('dwSize',               COORD),
+                ('dwCursorPosition',     COORD),
+                ('wAttributes',          wintypes.WORD),
+                ('srWindow',             wintypes.SMALL_RECT),
+                ('dwMaximumWindowSize',  COORD),
+                ('wPopupAttributes',     wintypes.WORD),
+                ('bFullscreenSupported', wintypes.BOOL),
+                ('ColorTable',           wintypes.DWORD * 16))
+
+LPBUEX = ctypes.POINTER(CONSOLE_SCREEN_BUFFER_INFOEX)
+WinTool.struct(LPBUEX)
+
+LPBUFF = ctypes.POINTER(CONSOLE_SCREEN_BUFFER_INFO)
+WinTool.struct(LPBUFF)
+
 LPSCAT = ctypes.POINTER(SECURITY_ATTRIBUTES) #haha lp-scat lol
 WinTool.struct(LPSCAT)
 
 #Windows Wrapped Functions using WinTool (WindowsCtypesHandler)
 
 kernel32 = ctypes.windll.kernel32 #simplifying kernel32
+
 
 @WinTool.func_attr(kernel32.GetStdHandle,
                    [wintypes.DWORD],
@@ -54,6 +92,7 @@ def GetStdHandle(self, handle: int):
     returns handle using given handle ID
     """
     return self(handle)
+
 
 @WinTool.func_attr(kernel32.GetConsoleMode,
                    [wintypes.HANDLE, wintypes.LPDWORD],
@@ -66,7 +105,7 @@ def GetConsoleMode(self, std_handle):
     result = bool(self(std_handle, con_mode))
     if result:
         return con_mode.value
-    
+
 @WinTool.func_attr(kernel32.FillConsoleOutputAttribute,
                    [
                        wintypes.HANDLE, wintypes.WORD, wintypes.DWORD,
@@ -93,7 +132,8 @@ def FillConsoleOutputAttribute(
     )
     return num_written.value
 
-WinTool.func_attr(kernel32.CreateConsoleScreenBuffer,
+
+@WinTool.func_attr(kernel32.CreateConsoleScreenBuffer,
                   [
                     wintypes.DWORD, wintypes.DWORD, LPSCAT, 
                     wintypes.DWORD, wintypes.LPVOID],
@@ -111,33 +151,6 @@ def CreateConsoleScreenBuffer(self, access = GENERIC_READ | GENERIC_WRITE,
     else:
         return buffer 
 
-@WinTool.struct
-class CONSOLE_SCREEN_BUFFER_INFOEX(Structure):
-    _fields_ = (('cbSize',               wintypes.ULONG),
-                ('dwSize',               COORD),
-                ('dwCursorPosition',     COORD),
-                ('wAttributes',          wintypes.WORD),
-                ('srWindow',             wintypes.SMALL_RECT),
-                ('dwMaximumWindowSize',  COORD),
-                ('wPopupAttributes',     wintypes.WORD),
-                ('bFullscreenSupported', wintypes.BOOL),
-                ('ColorTable',           wintypes.DWORD * 16))
-
-LPBUEX = ctypes.POINTER(CONSOLE_SCREEN_BUFFER_INFOEX)
-WinTool.struct(LPBUEX)
-
-@WinTool.struct
-class CONSOLE_SCREEN_BUFFER_INFO(Structure):
-    _fields_ = [
-        ("dwSize", COORD),
-        ("dwCursorPosition", COORD),
-        ("wAttributes", wintypes.WORD),
-        ("srWindow", wintypes.SMALL_RECT),
-        ("dwMaximumWindowSize", COORD),
-    ]
-
-LPBUFF = ctypes.POINTER(CONSOLE_SCREEN_BUFFER_INFO)
-WinTool.struct(LPBUFF)
 
 @WinTool.func_attr(kernel32.GetConsoleScreenBufferInfo,
                    [wintypes.HANDLE, LPBUFF],
@@ -150,6 +163,7 @@ def GetConsoleScreenBufferInfo(self, std_handle):
     self(std_handle, byref(buffer_info))
     return buffer_info
 
+
 @WinTool.func_attr(kernel32.GetConsoleScreenBufferInfoEx,
                    [wintypes.HANDLE, LPBUEX],
                    wintypes.BOOL)
@@ -161,6 +175,7 @@ def GetConsoleScreenBufferInfoEx(self, std_handle):
     self(int(std_handle), byref(extended_buffer_info))
     return extended_buffer_info
 
+
 @WinTool.func_attr(kernel32.SetConsoleCursorPosition,
                    [wintypes.HANDLE, COORD],
                    wintypes.BOOL)
@@ -169,6 +184,7 @@ def SetConsoleCursorPosition(self, std_handle, coords):
     Sets console cursor position using given HANDLE and COORD
     """
     return bool(self(std_handle, coords))
+
 
 @WinTool.func_attr(kernel32.SetConsoleTextAttribute,
                    [wintypes.HANDLE, wintypes.WORD],

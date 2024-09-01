@@ -1,8 +1,7 @@
-# type: ignore[<error-code>]
 from functools import wraps
 from inspect import getmembers, isclass
-from types import *
-from typing import *
+from types import ModuleType
+from typing import Any
 
 class FuncHandlerError(Exception):
     pass
@@ -20,11 +19,10 @@ type WinMethod = Any
 type ArgTypes = list[Any]
 type ResType = Any
 
-def get_lib_types(lib: ModuleType) -> list:
+def _get_lib_types(lib: ModuleType) -> list:
     return dict(getmembers(lib, isclass))
 
 class WindowsCtypesHandler:
-    #type: ignore[<error-code>]
     """
     A more intuitive class version of the WinFunc decorator
 
@@ -54,7 +52,7 @@ class WindowsCtypesHandler:
             #decorate at will!
             @handler.func_attr(
                 kernel32.GetStdHandle,
-                [wintypes.DWORD,],
+                [wintypes.DWORD,...],
                 wintypes.BOOL
             )
             def GetStdHandle(self, handle):
@@ -76,11 +74,16 @@ class WindowsCtypesHandler:
         ::for the functions to run easier to read and to find.
         ::does it require more boilerplate? possibly, but it creates
         ::something thats way easier to read, at least for my eyes.
+
+        ::The :stuct: decorator is to facilitate adding more or even
+        ::custom Structures to the classes type checking system. can either
+        ::be used as a decorator or just used as a straight method to insert
+        ::either structures or pointers to structures
     """
 
     def __init__(self, lib: ModuleType, types: ModuleType):
         self.library = lib
-        self.lib_types = get_lib_types(types) #dict of module class types
+        self.lib_types = _get_lib_types(types) #dict of module class types
         self.function_names = {}
 
     def _get_false(self, listing: dict) -> list[bool]:
@@ -95,7 +98,7 @@ class WindowsCtypesHandler:
         else:
             return True
     
-    def _check_argtypes(self, args: List[Any]) -> bool:
+    def _check_argtypes(self, args: list[Any]) -> bool:
         arg_results = {a: self._check_type(a) for a in args}
         if not all(arg_results.values()):
             raise FuncHandlerArgError(
@@ -173,20 +176,7 @@ if __name__ == "__main__":
     STDOUT = -11
 
     handle = GetStdHandle(STDOUT)
-
-    from rich import inspect
-    """
     print(handle)
-    print(handler.__doc__)
-    print(handler.functions)
-    print(handler.functions['GetStdHandle'].__doc__)
-
-    handle = GetStdHandle(STDOUT)
-    print(handle)
-    function = handler.function('GetStdHandle')
-    handle = function[1](function[0], STDOUT)
-    print(handle)
-    """
 
     @handler.struct
     class COORD(ctypes.Structure):
@@ -201,5 +191,6 @@ if __name__ == "__main__":
     
     coord = COORD(20, 20)
     results = SetConsoleCursorPosition(handle, coord)
+    print(results)
         
         
