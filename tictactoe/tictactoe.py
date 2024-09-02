@@ -10,7 +10,7 @@ class TicTacToe:
 
     def GameLoop(self):
         self.screen.clear()
-        self.screen.printAtCenter("Not available yet sorry!")
+        self.screen.print_at_center("Not available yet sorry!")
         time.sleep(5)
         self.parent.Quit()
 
@@ -24,7 +24,7 @@ class ChaosTtt:
 
     def GameLoop(self):
         self.screen.clear()
-        self.screen.printAtCenter("Not available yet sorry!")
+        self.screen.print_at_center("Not available yet sorry!")
         time.sleep(5)
         self.parent.Quit()
 
@@ -38,7 +38,7 @@ class PandemoniumTtt:
 
     def GameLoop(self):
         self.screen.clear()
-        self.screen.printAtCenter("Not available yet sorry!")
+        self.screen.print_at_center("Not available yet sorry!")
         time.sleep(5)
         self.parent.Quit()
 

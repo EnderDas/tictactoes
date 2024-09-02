@@ -51,11 +51,11 @@ class SECURITY_ATTRIBUTES(Structure):
 @WinTool.struct
 class CONSOLE_SCREEN_BUFFER_INFO(Structure):
     _fields_ = [
-        ("dwSize", COORD),
-        ("dwCursorPosition", COORD),
-        ("wAttributes", wintypes.WORD),
-        ("srWindow", wintypes.SMALL_RECT),
-        ("dwMaximumWindowSize", COORD),
+        ("dwSize",                  COORD),
+        ("dwCursorPosition",        COORD),
+        ("wAttributes",             wintypes.WORD),
+        ("srWindow",                wintypes.SMALL_RECT),
+        ("dwMaximumWindowSize",     COORD),
     ]
 
 @WinTool.struct
@@ -70,6 +70,12 @@ class CONSOLE_SCREEN_BUFFER_INFOEX(Structure):
                 ('bFullscreenSupported', wintypes.BOOL),
                 ('ColorTable',           wintypes.DWORD * 16))
 
+@WinTool.struct
+class CONSOLE_CURSOR_INFO(Structure):
+    _fields_ = (('dwSize',      wintypes.DWORD),
+                ('bVisible',    wintypes.BOOL))
+
+# Pointer structs added to WinTools Type system
 LPBUEX = ctypes.POINTER(CONSOLE_SCREEN_BUFFER_INFOEX)
 WinTool.struct(LPBUEX)
 
@@ -78,6 +84,9 @@ WinTool.struct(LPBUFF)
 
 LPSCAT = ctypes.POINTER(SECURITY_ATTRIBUTES) #haha lp-scat lol
 WinTool.struct(LPSCAT)
+
+LPCCUI = ctypes.POINTER(CONSOLE_CURSOR_INFO)
+WinTool.struct(LPCCUI)
 
 #Windows Wrapped Functions using WinTool (WindowsCtypesHandler)
 
@@ -92,7 +101,6 @@ def GetStdHandle(self, handle: int):
     returns handle using given handle ID
     """
     return self(handle)
-
 
 @WinTool.func_attr(kernel32.GetConsoleMode,
                    [wintypes.HANDLE, wintypes.LPDWORD],
@@ -132,7 +140,6 @@ def FillConsoleOutputAttribute(
     )
     return num_written.value
 
-
 @WinTool.func_attr(kernel32.CreateConsoleScreenBuffer,
                   [
                     wintypes.DWORD, wintypes.DWORD, LPSCAT, 
@@ -151,7 +158,6 @@ def CreateConsoleScreenBuffer(self, access = GENERIC_READ | GENERIC_WRITE,
     else:
         return buffer 
 
-
 @WinTool.func_attr(kernel32.GetConsoleScreenBufferInfo,
                    [wintypes.HANDLE, LPBUFF],
                    wintypes.BOOL)
@@ -163,6 +169,13 @@ def GetConsoleScreenBufferInfo(self, std_handle):
     self(std_handle, byref(buffer_info))
     return buffer_info
 
+@WinTool.func_attr(kernel32.GetConsoleCursorInfo,
+                   [wintypes.HANDLE, LPCCUI],
+                   wintypes.BOOL)
+def GetConsoleCursorInfo(self, std_handle):
+    cursor_info = CONSOLE_CURSOR_INFO()
+    self(std_handle, byref(cursor_info))
+    return cursor_info
 
 @WinTool.func_attr(kernel32.GetConsoleScreenBufferInfoEx,
                    [wintypes.HANDLE, LPBUEX],
@@ -171,10 +184,20 @@ def GetConsoleScreenBufferInfoEx(self, std_handle):
     """
     Returns ConsoleScreenBuffer extended info using given handle
     """
-    extended_buffer_info = CONSOLE_SCREEN_BUFFER_INFOEX()
-    self(int(std_handle), byref(extended_buffer_info))
-    return extended_buffer_info
+    #wasnt setting size of buffer info so it wasnt returning anything lol
+    csbiex = CONSOLE_SCREEN_BUFFER_INFOEX()
+    csbiex.cbSize = sizeof(csbiex)
+    self(int(std_handle), byref(csbiex))
+    return csbiex
 
+@WinTool.func_attr(kernel32.SetConsoleScreenBufferInfoEx,
+                    [wintypes.HANDLE, LPBUEX],
+                    wintypes.BOOL)
+def SetConsoleScreenBufferInfoEx(self, std_handle, lp_csbix):
+    #forgot to use byref to actual reference the buffer pointer
+    lp_csbix.cbSize = ctypes.sizeof(lp_csbix)
+    results = self(std_handle, byref(lp_csbix))
+    return results
 
 @WinTool.func_attr(kernel32.SetConsoleCursorPosition,
                    [wintypes.HANDLE, COORD],
@@ -185,7 +208,6 @@ def SetConsoleCursorPosition(self, std_handle, coords):
     """
     return bool(self(std_handle, coords))
 
-
 @WinTool.func_attr(kernel32.SetConsoleTextAttribute,
                    [wintypes.HANDLE, wintypes.WORD],
                    wintypes.BOOL)
@@ -195,11 +217,52 @@ def SetConsoleTextAttribute(self, handle, attributes):
     """
     return bool(self(handle, attributes))
 
+@WinTool.func_attr(kernel32.SetConsoleTitleA,
+                   [wintypes.LPCSTR],
+                   wintypes.BOOL)
+def SetConsoleTitle(self, title):
+    results = self(wintypes.LPCSTR(title.encode()))
+    return results
+
+@WinTool.func_attr(kernel32.SetConsoleCursorInfo,
+                   [wintypes.HANDLE, LPCCUI],
+                   wintypes.BOOL)
+def SetConsoleCursorInfo(self, handle, ccui):
+    return self(handle, byref(ccui))
+
+"""
+TODO
+    ::Add mouse input support, inject mouse support into input class
+
+"""
 
 #testing ScreenBuffer functions
 if __name__ == "__main__":
+    import time
     handle = GetStdHandle(STDOUT)
     buffer_info = GetConsoleScreenBufferInfo(handle)
     print(buffer_info)
-    extended_info = GetConsoleScreenBufferInfoEx(handle)
-    print(extended_info)
+    csbiex = GetConsoleScreenBufferInfoEx(handle)
+    print("did thing")
+    print("Retrieved Console Screen Buffer Info:")
+    print(f"Screen Buffer Size (X, Y): ({csbiex.dwSize.X}, {csbiex.dwSize.Y})")
+    print(f"Cursor Position (X, Y): ({csbiex.dwCursorPosition.X}, {csbiex.dwCursorPosition.Y})")
+    print(f"Attributes: {csbiex.wAttributes}")
+    print(f"Window (Left, Top, Right, Bottom): ({csbiex.srWindow.Left}, {csbiex.srWindow.Top}, {csbiex.srWindow.Right}, {csbiex.srWindow.Bottom})")
+    print(f"Maximum Window Size (X, Y): ({csbiex.dwMaximumWindowSize.X}, {csbiex.dwMaximumWindowSize.Y})")
+    print(f"Popup Attributes: {csbiex.wPopupAttributes}")
+    print(f"Fullscreen Supported: {csbiex.bFullscreenSupported}")
+    print(csbiex.dwSize.X, csbiex.dwSize.Y)
+    csbiex.dwSize.X = 140
+    csbiex.dwSize.Y = 20
+    print(csbiex.dwSize.X, csbiex.dwSize.Y)
+    csbiex.wAttributes = 8
+    results = SetConsoleScreenBufferInfoEx(handle, csbiex)
+    print(results)
+    print(ctypes.GetLastError())
+    cursor = GetConsoleCursorInfo(handle)
+    cursor.bVisible = 0
+    print(SetConsoleCursorInfo(handle, cursor))
+    print(ctypes.WinError(ctypes.GetLastError()))
+
+    #that works better lol

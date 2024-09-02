@@ -2,40 +2,59 @@
 from msvcrt import kbhit, getch
 from errors import *
 from option import *
+from colors import WinColors
+from win_screen import *
+import math
 import time
+
+class WinScreen: #move to separate file and make a proper wrapper
+
+    def __init__(self):
+        self.handle = GetStdHandle(STDOUT)
+        self.csbi = GetConsoleScreenBufferInfo(self.handle)
+        self.csbiex = GetConsoleScreenBufferInfoEx(self.handle)
+        self.width = self.csbi.dwSize.X
+        self.height = self.csbi.dwSize.Y
+
+    def set_title(self, name):
+        SetConsoleTitle(name)
+
+    def set_cursor(self, x, y):
+        coords = COORD(x, y)
+        SetConsoleCursorPosition(self.handle, coords)
+
+    def set_cursor_vis(self, setting: bool):
+        cursor = GetConsoleCursorInfo(self.handle)
+        cursor.bVisible = setting
+        results = SetConsoleCursorInfo(self.handle, cursor)
+        if not results:
+            raise WinScreenError("Could not set cursor visibility!")
+
+    def reset_cursor(self):
+        self.set_cursor(0, 0)
+
+    def clearSec(self, start, stop):
+        """
+        takes two tuples of coords and clears just that section
+        """
+        pass
+
+    def clear(self):
+        #have to use -2 since windows is really weird
+        chars = ' ' * (self.width-2) + "\n"
+        chars = chars * (self.height-2)
+        print(chars, end=" ", flush=False)
+        self.reset_cursor()
+
+    def fill_color(self, start, stop, color):
+        num_rows = stop.Y - start.Y
+        chars_per_row = stop.X - start.X
+        for row in range(num_rows):
+            coord = COORD(start.X, start.Y + row)
+            FillConsoleOutputAttribute(self.handle, color, chars_per_row, coord)
 
 #basic screen class
 class Screen:
-
-    class WinScreen: #move to separate file and make a proper wrapper
-
-        import ctypes
-        STD_OUTPUT_HANDLE = -11
-
-        class POINT(ctypes.Structure):
-            pass
-        POINT._fields_ = [("X", ctypes.c_short), ("Y", ctypes.c_short)]
-
-        def __init__(self):
-            from os import get_terminal_size
-            self.width, self.height = get_terminal_size()
-
-        def setCursor(self, x, y):
-            h = self.ctypes.windll.kernel32.GetStdHandle(
-                self.STD_OUTPUT_HANDLE
-                )
-            self.ctypes.windll.kernel32.SetConsoleCursorPosition(
-                h, self.POINT(int(x), int(y))
-            )
-
-        def refresh(self):
-            self.setCursor(0, 0)
-
-        def clear(self):
-            chars = ' ' * (self.width-2) + "\n"
-            chars = chars * (self.height-2)
-            print(chars, end=" ", flush=False)
-            self.refresh()
 
     def __init__(self):
         from platform import system
@@ -43,23 +62,28 @@ class Screen:
         if self.system != "Windows":
             raise GameError("System not supported, could not resolve system")
         else:
-            #no curses... womp womp
-            #curses seems to be broken with everything ive looked into
-            #at least PDcurses is broken for windows thats for sure
-            self.screen = self.WinScreen()
+            self.screen = WinScreen()
         self.width = self.screen.width
         self.height = self.screen.height
+        self.menu = self.basic_key_menu
+        self.colors = WinColors()
 
-    def setCursor(self, x, y):
-        self.screen.setCursor(x, y)
+    def hide_cursor(self):
+        self.screen.set_cursor_vis(False)
+
+    def show_cursor(self):
+        self.screen.set_cursor_vis(True)
+
+    def set_cursor(self, x, y):
+        self.screen.set_cursor(x, y)
 
     def refresh(self):
-        self.screen.refresh()
+        self.screen.reset_cursor()
 
     def clear(self):
         self.screen.clear()
 
-    def menu(self, options):
+    def basic_key_menu(self, options):
         #raise NotImplementedError("still working on it")
         if isinstance(options, OptionGroup):
             itemized = []
@@ -67,33 +91,46 @@ class Screen:
                 item = f"[{i.upper()}] {options.get_option(key=i).name}"
                 itemized.append(item)
             text = '\n'.join(itemized)
-            self.printAtCenter(text)
+            self.print_at_center(text)
         else:
             raise ScreenError(
                 f"cannot use :{options}: must use :OptionGroup:"
                 )
 
-    def printAt(self, text, coords):
+    def print_at(self, text, coords):
         texts = text.split('\n')
         next_line = 0
         for i in texts:
-            self.setCursor(coords[0], coords[1]+next_line)
+            self.set_cursor(coords[0], coords[1]+next_line)
             print(i, end="", flush=False)
             next_line+=1
-        self.setCursor(0, 0)
+        self.set_cursor(0, 0)
 
-    def printAtCenter(self, text):
+    def print_at_center(self, text):
         text = text.split('\n')
         center = (
             (
-                abs(self.width/2) - len(max(text))
+                math.floor(self.width/2) - len(max(text,key=len))
             ),
             (
-                abs(self.height/2) - len(text)
+                math.floor(self.height/2) - len(text)
             )
         )
         text = '\n'.join(text)
-        self.printAt(text, center)
+        self.print_at(text, center)
+
+    def color_print_at(self, text, color, coord):
+        data = text.split('\n')
+        start = coord
+        end = (len(max(data, key=len))+start[0], len(data)+start[1])
+        print("\n",start, end)
+        print(data)
+        print(max(data))
+        print(data[0] > data[1])
+        #assume color is handled
+        self.print_at(text, start)
+        self.screen.fill_color(COORD(*start), COORD(*end), color)
+        
 
 class Handler:
 
@@ -102,7 +139,7 @@ class Handler:
         self.binds = {}
         self.bind_keys = []
         
-    def is_binded(self, func, key=None) -> tuple:
+    def is_bound(self, func, key=None) -> tuple:
         for i in self.binds.keys():
             if func in self.binds[i]:
                 return (True, i)
@@ -122,7 +159,8 @@ class Handler:
             if self.binds[key] != func:
                 new_binds.append(func) 
             else:
-                raise Exception("Cannot bind function twice to same key")
+                raise InputError(
+                    "Cannot bind function twice, use Handler.clear_binds first")
             self.binds[key] = new_binds
             self.bind_keys.append(key)
         else:
@@ -138,7 +176,7 @@ class Handler:
         for i in options.group:
             self.bind_option(i)
 
-    def clear_bindings(self):
+    def clear_binds(self):
         self.binds = {}
         self.bind_keys = []
 
@@ -230,7 +268,7 @@ class Inputs:
         if self.awaiting:
             return self.getKey()
         else: 
-            raise KeyError("No keypress awaited")
+            raise KeyboardError("No keypress awaited")
     
     @property
     def handle(self):
@@ -240,9 +278,9 @@ class Inputs:
         return self.handler
     
 
-
-if __name__ == "__main__":
-
+TESTING_INPUT = False
+TESTING_SCREEN = True
+if TESTING_INPUT:
     def function():
         print("a key pressed!")
 
@@ -254,3 +292,18 @@ if __name__ == "__main__":
         #handler.listen('a') you can use this or
         handler.listener()
         #wow this works better than i thought it would.. lol
+
+if TESTING_SCREEN:
+    screen = Screen()
+    start = COORD(20,20)
+    stop = COORD(40,40)
+    color = screen.colors.produce_flag(
+        screen.colors.LIGHT_MAGENTA,
+        screen.colors.BLUE
+    )
+    #screen.screen.fill_color(start, stop, color)
+    screen.color_print_at(
+        "ayy lmao whats up dog\neat my butt lol",
+        color,
+        (15,20)
+        )

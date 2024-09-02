@@ -13,17 +13,17 @@ class GameConstError(Exception):
 class ScreenError(Exception):
     pass
 
-class WinScreenError(ScreenError):
+class WinScreenError(Exception):
     pass
 
 class OptionError(Exception):
     pass
 
-class OptionGroupError(OptionError):
+class OptionGroupError(Exception):
     pass
 
 class InputError(Exception):
     pass
 
-class KeyError(InputError):
+class KeyboardError(Exception):
     pass

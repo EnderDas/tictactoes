@@ -19,7 +19,7 @@ type WinMethod = Any
 type ArgTypes = list[Any]
 type ResType = Any
 
-def _get_lib_types(lib: ModuleType) -> list:
+def _get_lib_types(lib) -> list:
     return dict(getmembers(lib, isclass))
 
 class WindowsCtypesHandler:
@@ -81,7 +81,7 @@ class WindowsCtypesHandler:
         ::either structures or pointers to structures
     """
 
-    def __init__(self, lib: ModuleType, types: ModuleType):
+    def __init__(self, lib, types):
         self.library = lib
         self.lib_types = _get_lib_types(types) #dict of module class types
         self.function_names = {}

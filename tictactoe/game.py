@@ -126,6 +126,17 @@ from option import *
 from tictactoe import TicTacToe, ChaosTtt, PandemoniumTtt
 import os, time
 
+color_pallet = {
+    'Raisin black': 0x00282828,
+    'Denim': 0x002c63b0,
+    'Mantis': 0x006cbf57,
+    'Keppel': 0x002bc0aa,
+    'Auburn': 0x009b2c2a,
+    'Purpureus': 0x00b041b8,
+    'Old gold': 0x00b6ab44,
+    'Ash gray': 0x00a7a796
+}
+
 class Game:
 
     def __init__(self):
@@ -136,9 +147,11 @@ class Game:
         self.baseTtt = TicTacToe(self)
         self.chaosTtt = ChaosTtt(self)
         self.pandeTtt = PandemoniumTtt(self)
+        self.screen.screen.set_title("Tic Tac Toes")
+        self.screen.hide_cursor()
 
     def GameLoop(self):
-        self.inp_handle.clear_bindings()
+        self.inp_handle.clear_binds()
         options = OptionGroup([{
                 "key": 't',
                 "name": "TicTacToe",
@@ -168,7 +181,7 @@ class Game:
 
     def MainMenu(self):
         #static variables and definitions go here
-        self.inp_handle.clear_bindings()
+        self.inp_handle.clear_binds()
         options = OptionGroup([{
                 "key": 'p',
                 "name": "Play",
@@ -183,19 +196,18 @@ class Game:
         self.screen.clear()
         self.screen.menu(options)
         self.inp_handle.bind_options(options)
-        print(self.input.awaiting())
         while True:
             self.inp_handle.listener()
             
     def Play(self):
         self.screen.clear()
-        self.screen.printAtCenter("Ready for some Tic Tac Toe?")
+        self.screen.print_at_center("Ready for some Tic Tac Toe?")
         time.sleep(5)
         self.GameLoop()
 
     def Quit(self):
         self.screen.clear()
-        self.screen.printAtCenter(
+        self.screen.print_at_center(
             "thank you for using my software!"
         )
         time.sleep(5)
